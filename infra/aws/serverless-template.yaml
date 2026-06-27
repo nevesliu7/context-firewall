@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Context Firewall API deployment skeleton
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 20
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        AUDIT_TABLE_NAME: !Ref AuditTable
+        APPROVAL_TABLE_NAME: !Ref ApprovalTable
+        CFW_FORWARD_MODE: dry_run
+        CFW_AUDIT_BACKEND: dynamodb
+        CFW_APPROVAL_BACKEND: dynamodb
+        CFW_AWS_ENABLED: "true"
+
+Resources:
+  ContextFirewallApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - content-type
+          - authorization
+          - x-cfw-tenant-id
+          - x-cfw-user-id
+          - x-cfw-user-role
+          - x-cfw-provider
+          - x-cfw-destination
+          - x-cfw-app-name
+          - x-cfw-admin-token
+
+  ContextFirewallFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../api
+      Handler: app.main.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApprovalTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:GenerateDataKey
+              Resource: "*"
+      Events:
+        OpenAICompatibleGateway:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /v1/chat/completions
+            Method: POST
+        GatewayChat:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /gateway/chat
+            Method: POST
+        Scan:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /scan
+            Method: POST
+        Audit:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /audit
+            Method: GET
+        Approvals:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /approvals
+            Method: GET
+        Metrics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /metrics/summary
+            Method: GET
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /health
+            Method: GET
+
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenant_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenant_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  ApprovalTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenant_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenant_id
+          KeyType: HASH
+        - AttributeName: created_at
+          KeyType: RANGE
+
+Outputs:
+  ApiEndpoint:
+    Description: Context Firewall API endpoint
+    Value: !Sub "https://${ContextFirewallApi}.execute-api.${AWS::Region}.amazonaws.com"

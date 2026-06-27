@@ -1,0 +1,20 @@
+# Python
+api/.venv/
+**/__pycache__/
+api/context_firewall.db
+api/policies/*.bak.json
+.pytest_cache/
+
+# Node
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+
+# Local env
+.env
+.env.*
+
+# System
+.DS_Store

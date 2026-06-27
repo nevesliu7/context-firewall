@@ -1,0 +1,112 @@
+{
+  "version": "2026-06-27.enterprise-1",
+  "description": "Default enterprise policy pack for outbound LLM context governance.",
+  "approved_providers": {
+    "external_llm": ["openai", "anthropic", "bedrock"],
+    "internal_llm": ["bedrock", "local"],
+    "agent_tool": ["internal_tool_runtime"],
+    "browser_extension": ["local"]
+  },
+  "role_limits": {
+    "contractor": {
+      "max_external_risk": 25,
+      "on_exceed": "review"
+    },
+    "support_agent": {
+      "max_external_risk": 55,
+      "on_exceed": "review"
+    },
+    "developer": {
+      "max_external_risk": 70,
+      "on_exceed": "review"
+    },
+    "security_admin": {
+      "max_external_risk": 85,
+      "on_exceed": "review"
+    }
+  },
+  "rules": [
+    {
+      "id": "ROUTE-001",
+      "name": "Provider must be approved for destination",
+      "description": "Block model providers that are not allow-listed for the destination class.",
+      "severity": "critical",
+      "action": "block",
+      "system_rule": "provider_allowlist"
+    },
+    {
+      "id": "SEC-001",
+      "name": "Secrets cannot leave the tenant boundary",
+      "description": "Hard block credentials and private keys. Redaction is insufficient because exposure usually requires rotation.",
+      "severity": "critical",
+      "action": "block",
+      "match": {
+        "types": ["secret"],
+        "destinations": ["external_llm", "agent_tool", "browser_extension"]
+      }
+    },
+    {
+      "id": "PII-004",
+      "name": "Regulated identifiers require blocking for external LLMs",
+      "description": "Block SSNs and credit-card-like identifiers when destination is an external model provider.",
+      "severity": "critical",
+      "action": "block",
+      "match": {
+        "types": ["regulated"],
+        "destinations": ["external_llm"]
+      }
+    },
+    {
+      "id": "CTX-007",
+      "name": "Prompt injection requires isolation",
+      "description": "Route prompt-injection attempts to human review so they cannot override downstream agents.",
+      "severity": "high",
+      "action": "review",
+      "match": {
+        "types": ["prompt_injection"]
+      }
+    },
+    {
+      "id": "BUS-003",
+      "name": "Confidential business context requires review before external routing",
+      "description": "Require approval for confidential business context leaving the tenant boundary.",
+      "severity": "high",
+      "action": "review",
+      "match": {
+        "types": ["confidential"],
+        "destinations": ["external_llm"]
+      }
+    },
+    {
+      "id": "SRC-002",
+      "name": "Source code secret context requires review",
+      "description": "Review code snippets that contain secret-bearing environment or authorization patterns.",
+      "severity": "high",
+      "action": "review",
+      "match": {
+        "types": ["source_code"]
+      }
+    },
+    {
+      "id": "PII-001",
+      "name": "PII must be redacted before model routing",
+      "description": "Replace direct personal identifiers with stable redaction tokens before sending context to a model.",
+      "severity": "medium",
+      "action": "redact",
+      "match": {
+        "types": ["pii"]
+      }
+    },
+    {
+      "id": "RISK-006",
+      "name": "High aggregate risk requires human review",
+      "description": "Review requests whose aggregate detector score exceeds the automation threshold.",
+      "severity": "high",
+      "action": "review",
+      "match": {
+        "min_risk": 85
+      }
+    }
+  ]
+}
+

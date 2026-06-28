@@ -100,6 +100,20 @@ type Metrics = {
   pending_approvals: number;
 };
 
+type UsageRow = {
+  tenant_id: string;
+  bucket_type: "minute" | "day";
+  request_count: number;
+  estimated_tokens: number;
+  updated_at: string;
+};
+
+type UsageMetrics = {
+  current_minute: string;
+  current_day: string;
+  usage: UsageRow[];
+};
+
 const payloads = {
   secret: {
     model: "gpt-4.1-mini",
@@ -169,6 +183,7 @@ function App() {
   const [audit, setAudit] = useState<AuditRecord[]>([]);
   const [approvals, setApprovals] = useState<ApprovalTicket[]>([]);
   const [metrics, setMetrics] = useState<Metrics>({ decisions: {}, routes: {}, pending_approvals: 0 });
+  const [usage, setUsage] = useState<UsageMetrics>({ current_minute: "", current_day: "", usage: [] });
   const [policyText, setPolicyText] = useState("");
   const [adminToken, setAdminToken] = useState("dev-admin-token");
   const [policyStatus, setPolicyStatus] = useState("");
@@ -180,14 +195,16 @@ function App() {
   const DecisionIcon = meta.icon;
 
   async function refreshOperations() {
-    const [auditResponse, approvalsResponse, metricsResponse] = await Promise.all([
+    const [auditResponse, approvalsResponse, metricsResponse, usageResponse] = await Promise.all([
       fetch("/audit?limit=8"),
       fetch("/approvals?status=pending&limit=6"),
-      fetch("/metrics/summary")
+      fetch("/metrics/summary"),
+      fetch("/metrics/usage")
     ]);
     if (auditResponse.ok) setAudit(await auditResponse.json());
     if (approvalsResponse.ok) setApprovals(await approvalsResponse.json());
     if (metricsResponse.ok) setMetrics(await metricsResponse.json());
+    if (usageResponse.ok) setUsage(await usageResponse.json());
   }
 
   async function loadPolicy() {
@@ -467,6 +484,25 @@ function App() {
               </div>
             ))}
             {approvals.length === 0 && <p className="empty">No pending approvals.</p>}
+          </div>
+        </div>
+
+        <div className="audit-panel">
+          <div className="panel-heading compact">
+            <div>
+              <h2><Gauge size={18} /> Usage Controls</h2>
+              <p>Current request rate and estimated token budget by tenant.</p>
+            </div>
+          </div>
+          <div className="usage-grid">
+            {usage.usage.map((row) => (
+              <div className="usage-item" key={`${row.tenant_id}-${row.bucket_type}`}>
+                <strong>{row.bucket_type}</strong>
+                <span>{row.tenant_id}</span>
+                <small>{row.request_count} requests · {row.estimated_tokens} est. tokens</small>
+              </div>
+            ))}
+            {usage.usage.length === 0 && <p className="empty">No usage counters yet.</p>}
           </div>
         </div>
       </section>

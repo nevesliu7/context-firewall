@@ -491,8 +491,9 @@ input {
 
 .ops-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+  align-items: start;
 }
 
 .policy-admin-grid {
@@ -529,6 +530,32 @@ input {
   border: 1px solid #e1e6dd;
   border-radius: 7px;
   background: #fbfcf9;
+}
+
+.usage-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.usage-item {
+  display: grid;
+  gap: 5px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid #e1e6dd;
+  border-radius: 7px;
+  background: #fbfcf9;
+}
+
+.usage-item strong {
+  color: #314f83;
+  text-transform: uppercase;
+}
+
+.usage-item span,
+.usage-item small {
+  color: #68766c;
+  font-size: 12px;
 }
 
 .audit-item strong {

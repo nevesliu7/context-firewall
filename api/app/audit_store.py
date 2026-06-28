@@ -204,28 +204,39 @@ def create_approval_ticket(request: ScanRequest, response: ScanResponse, origina
     return ticket
 
 
-def list_audit_records(limit: int = 25) -> list[dict]:
+def list_audit_records(limit: int = 25, tenant_id: str | None = None) -> list[dict]:
     init_db()
+    sql = "SELECT * FROM audit_records"
+    params: list[object] = []
+    if tenant_id:
+        sql += " WHERE tenant_id = ?"
+        params.append(tenant_id)
+    sql += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT * FROM audit_records
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 
-def list_approval_tickets(status: ApprovalStatus | None = None, limit: int = 25) -> list[dict]:
+def list_approval_tickets(
+    status: ApprovalStatus | None = None,
+    limit: int = 25,
+    tenant_id: str | None = None,
+) -> list[dict]:
     init_db()
     sql = "SELECT * FROM approval_tickets"
     params: list[object] = []
+    clauses: list[str] = []
     if status:
-        sql += " WHERE status = ?"
+        clauses.append("status = ?")
         params.append(status.value)
+    if tenant_id:
+        clauses.append("tenant_id = ?")
+        params.append(tenant_id)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
 
@@ -252,24 +263,38 @@ def update_approval_ticket(ticket_id: str, decision: ApprovalDecisionRequest) ->
     return dict(row) if row else None
 
 
-def audit_summary() -> dict[str, object]:
+def audit_summary(tenant_id: str | None = None) -> dict[str, object]:
     init_db()
+    where = "WHERE tenant_id = ?" if tenant_id else ""
+    params: tuple[str, ...] = (tenant_id,) if tenant_id else ()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         decisions = conn.execute(
-            "SELECT decision, COUNT(*) AS count FROM audit_records GROUP BY decision"
+            f"SELECT decision, COUNT(*) AS count FROM audit_records {where} GROUP BY decision",
+            params,
         ).fetchall()
         routes = conn.execute(
-            "SELECT provider_route, COUNT(*) AS count FROM audit_records GROUP BY provider_route"
+            f"SELECT provider_route, COUNT(*) AS count FROM audit_records {where} GROUP BY provider_route",
+            params,
         ).fetchall()
+        pending_where = "WHERE status = 'pending'"
+        pending_params: tuple[str, ...] = ()
+        if tenant_id:
+            pending_where += " AND tenant_id = ?"
+            pending_params = (tenant_id,)
         pending = conn.execute(
-            "SELECT COUNT(*) AS count FROM approval_tickets WHERE status = 'pending'"
+            f"SELECT COUNT(*) AS count FROM approval_tickets {pending_where}",
+            pending_params,
         ).fetchone()
     return {
         "decisions": {row["decision"]: row["count"] for row in decisions},
         "routes": {row["provider_route"]: row["count"] for row in routes},
         "pending_approvals": pending["count"] if pending else 0,
     }
+
+
+def export_audit_records(limit: int = 1000, tenant_id: str | None = None) -> list[dict]:
+    return list_audit_records(limit=max(1, min(limit, 10_000)), tenant_id=tenant_id)
 
 
 def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:

@@ -12,6 +12,9 @@ web/*.tsbuildinfo
 web/vite.config.js
 web/vite.config.d.ts
 
+# Build artifacts
+build/
+
 # Local env
 .env
 .env.*

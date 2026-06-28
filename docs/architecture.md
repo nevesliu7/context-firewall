@@ -8,7 +8,8 @@ Context Firewall is designed as a policy enforcement point for LLM applications.
 flowchart LR
   Client["App / Agent / SDK"] --> Gateway["/v1/chat/completions or /gateway/chat"]
   Gateway --> Identity["Tenant + User + Role Context"]
-  Identity --> Detect["Detectors"]
+  Identity --> Usage["Tenant Rate + Budget Check"]
+  Usage --> Detect["Detectors"]
   Detect --> Policy["Config-Driven Policy Engine"]
   Policy --> Decision{"allow / redact / review / block"}
   Decision -->|allow| Route["Provider Adapter"]
@@ -18,6 +19,7 @@ flowchart LR
   Decision -->|block| Deny["Policy Error"]
   Route --> Provider["OpenAI-Compatible Provider / Bedrock / Internal Model"]
   Gateway --> Audit["Append-Only Audit Metadata"]
+  Audit --> Export["JSON / NDJSON Audit Export"]
 ```
 
 ## Control Plane
@@ -26,6 +28,8 @@ flowchart LR
 - Policies can match finding type, label, severity, destination, provider, role, and aggregate risk.
 - Provider allowlists are enforced before any live routing.
 - Role limits prevent lower-trust roles from routing high-risk context externally.
+- Usage limits cap per-tenant request rate and daily estimated-token volume.
+- RBAC scopes audit, approval, metrics, policy admin, and audit export access in production mode.
 
 ## Data Boundary
 
@@ -33,6 +37,7 @@ flowchart LR
 - Audit records store hashes, counts, route, user, role, tenant, provider, and policy version.
 - Review tickets store sanitized content only.
 - Provider payloads are built from sanitized messages.
+- Audit exports contain metadata only and are intended for SIEM, Security Lake, or S3 retention.
 
 ## Why Deterministic Policy Comes First
 
@@ -48,7 +53,9 @@ flowchart TB
   Lambda --> Policy["Policy Pack in S3/AppConfig"]
   Lambda --> AuditDDB["DynamoDB Audit Table"]
   Lambda --> ApprovalDDB["DynamoDB Approval Table"]
+  Lambda --> Secret["Secrets Manager Provider Keys"]
   Lambda --> KMS["KMS Encryption"]
+  Lambda --> S3["S3 Audit Export Bucket"]
   Lambda --> CW["CloudWatch Metrics + Logs"]
   Lambda --> Queue["SQS Review Queue"]
   Queue --> Step["Step Functions Approval Workflow"]
@@ -65,6 +72,5 @@ flowchart TB
 - Add immutable log delivery to S3 or Security Lake.
 - Add detector allowlists for known test data and false-positive exceptions.
 - Add per-tenant encryption keys for approval artifacts.
-- Add rate limits and provider budget controls.
+- Tune rate limits and provider budget controls by tenant and role.
 - Add structured metrics by policy id, decision, provider, tenant, and app.
-

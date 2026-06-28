@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: ./api
+    environment:
+      CFW_ADMIN_TOKEN: dev-admin-token
+      CFW_FORWARD_MODE: dry_run
+      CFW_USAGE_LIMITS_ENABLED: "true"
+      CFW_RATE_LIMIT_PER_MINUTE: "120"
+      CFW_DAILY_TOKEN_BUDGET_PER_TENANT: "200000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: ./web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "5173:80"

@@ -55,7 +55,7 @@ def resolve_identity(
 
 def auth_config_summary() -> dict[str, object]:
     return {
-        "auth_required": _auth_required(),
+        "auth_required": auth_required(),
         "issuer": os.getenv("CFW_JWT_ISSUER", ""),
         "audience_configured": bool(os.getenv("CFW_JWT_AUDIENCE")),
         "jwks_url_configured": bool(_jwks_url()),
@@ -65,7 +65,7 @@ def auth_config_summary() -> dict[str, object]:
 
 def _decode_jwt(token: str) -> dict[str, Any]:
     if jwt is None:
-        if _auth_required():
+        if auth_required():
             raise HTTPException(status_code=500, detail="PyJWT is required when auth is enforced")
         return _unsafe_decode_payload(token)
 
@@ -83,7 +83,7 @@ def _decode_jwt(token: str) -> dict[str, Any]:
             issuer=issuer,
         )
 
-    if _auth_required():
+    if auth_required():
         raise HTTPException(status_code=500, detail="CFW_JWT_ISSUER, CFW_JWT_AUDIENCE, and JWKS URL are required")
 
     return jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_iss": False})
@@ -137,6 +137,9 @@ def _jwks_url() -> str | None:
     return None
 
 
-def _auth_required() -> bool:
+def auth_required() -> bool:
     return os.getenv("CFW_AUTH_REQUIRED", "false").lower() == "true"
 
+
+def _auth_required() -> bool:
+    return auth_required()

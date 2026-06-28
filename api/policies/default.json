@@ -25,6 +25,16 @@
       "on_exceed": "review"
     }
   },
+  "usage_limits": {
+    "requests_per_minute_per_tenant": 120,
+    "daily_estimated_tokens_per_tenant": 200000,
+    "daily_estimated_tokens_by_role": {
+      "contractor": 20000,
+      "support_agent": 60000,
+      "developer": 120000,
+      "security_admin": 200000
+    }
+  },
   "rules": [
     {
       "id": "ROUTE-001",
@@ -109,4 +119,3 @@
     }
   ]
 }
-

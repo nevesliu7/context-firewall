@@ -12,10 +12,16 @@ Globals:
       Variables:
         AUDIT_TABLE_NAME: !Ref AuditTable
         APPROVAL_TABLE_NAME: !Ref ApprovalTable
+        AUDIT_EXPORT_BUCKET: ""
         CFW_FORWARD_MODE: dry_run
         CFW_AUDIT_BACKEND: dynamodb
+        CFW_AUDIT_EXPORT_BACKEND: download
         CFW_APPROVAL_BACKEND: dynamodb
         CFW_AWS_ENABLED: "true"
+        CFW_RBAC_ENFORCED: "true"
+        CFW_USAGE_LIMITS_ENABLED: "true"
+        CFW_RATE_LIMIT_PER_MINUTE: "120"
+        CFW_DAILY_TOKEN_BUDGET_PER_TENANT: "200000"
 
 Resources:
   ContextFirewallApi:
@@ -25,6 +31,8 @@ Resources:
         AllowMethods:
           - GET
           - POST
+          - PUT
+          - PATCH
           - OPTIONS
         AllowOrigins:
           - "*"
@@ -93,17 +101,65 @@ Resources:
             ApiId: !Ref ContextFirewallApi
             Path: /audit
             Method: GET
+        AuditExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /audit/export
+            Method: GET
         Approvals:
           Type: HttpApi
           Properties:
             ApiId: !Ref ContextFirewallApi
             Path: /approvals
             Method: GET
+        ApprovalDecision:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /approvals/{ticket_id}
+            Method: PATCH
         Metrics:
           Type: HttpApi
           Properties:
             ApiId: !Ref ContextFirewallApi
             Path: /metrics/summary
+            Method: GET
+        UsageMetrics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /metrics/usage
+            Method: GET
+        Policies:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /policies
+            Method: GET
+        EffectivePolicy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /config/effective-policy
+            Method: GET
+        UpdatePolicy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /config/effective-policy
+            Method: PUT
+        ValidatePolicy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /config/validate-policy
+            Method: POST
+        AuthConfig:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ContextFirewallApi
+            Path: /config/auth
             Method: GET
         Health:
           Type: HttpApi

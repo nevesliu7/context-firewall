@@ -20,8 +20,10 @@ ChatGPT can answer questions about safe handling, but it cannot enforce company 
 - Stable redaction tokens for sanitized provider payloads
 - Provider allowlist enforcement by destination
 - Role-based external routing thresholds
+- Per-tenant request rate limits and daily estimated-token budgets
 - Human-review ticket creation for review decisions
 - Audit records with hashes and metadata only; raw sensitive content is not stored in audit
+- RBAC-aware audit, approval, metrics, and audit-export endpoints for production mode
 - Dry-run provider routing by default
 - Optional live OpenAI-compatible forwarding through environment variables
 - Optional Secrets Manager provider key lookup
@@ -29,8 +31,9 @@ ChatGPT can answer questions about safe handling, but it cannot enforce company 
 - Optional DynamoDB dual-write adapter for audit and approval records
 - Policy admin API and UI with validation and backup creation
 - React operations console for gateway payloads, findings, policy hits, audit, metrics, and pending approvals
-- AWS deployment skeleton for API Gateway, Lambda, DynamoDB, CloudWatch, and Bedrock-facing routing
-- GitHub Actions CI template and Dependabot configuration
+- Docker Compose local deployment
+- Terraform AWS deployment for API Gateway, Lambda, Cognito, DynamoDB, KMS, Secrets Manager, S3 audit exports, and CloudWatch alarms
+- GitHub Actions CI and Dependabot configuration
 
 ## Run Locally
 
@@ -53,6 +56,14 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+Docker:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:5173`. The web container proxies API requests to the backend container.
 
 ## Gateway Example
 
@@ -109,6 +120,35 @@ export CFW_JWKS_URL=https://your-domain.okta.com/oauth2/default/v1/keys
 
 Cognito works the same way with the user-pool issuer and JWKS URL.
 
+Production RBAC is enabled when `CFW_AUTH_REQUIRED=true` or `CFW_RBAC_ENFORCED=true`. `SecurityAdmins` can write policy, decide approvals, and export audit records. `Developers` and `Support` users are tenant-scoped.
+
+## Usage Controls
+
+The gateway enforces per-tenant request and estimated-token budgets before provider routing:
+
+```bash
+export CFW_USAGE_LIMITS_ENABLED=true
+export CFW_RATE_LIMIT_PER_MINUTE=120
+export CFW_DAILY_TOKEN_BUDGET_PER_TENANT=200000
+```
+
+Policy packs can also define `usage_limits` and role-specific daily budgets.
+
+## AWS Deployment
+
+Package the Lambda app and deploy the Terraform stack:
+
+```bash
+./scripts/package-lambda.sh
+cd infra/terraform
+terraform init
+terraform apply \
+  -var lambda_package_path=../../build/context-firewall-lambda.zip \
+  -var admin_token='replace-with-a-long-random-value'
+```
+
+The Terraform stack creates Cognito groups, DynamoDB tables, a KMS key, a Secrets Manager secret, an immutable S3 audit export bucket, API Gateway, Lambda, and CloudWatch alarms. See `infra/terraform/README.md`.
+
 ## Policy Pack
 
 `api/policies/default.json` controls:
@@ -139,9 +179,11 @@ Example rule:
 - `POST /gateway/chat`: native gateway response with firewall metadata
 - `POST /scan`: direct scan for tools and diagnostics
 - `GET /audit`: audit metadata
+- `GET /audit/export`: JSON or NDJSON audit export with tenant filtering; optional `delivery=s3`
 - `GET /approvals`: pending or historical review tickets
 - `PATCH /approvals/{ticket_id}`: approve or reject a ticket
 - `GET /metrics/summary`: decision and route counts
+- `GET /metrics/usage`: request and estimated-token usage counters
 - `GET /config/effective-policy`: loaded policy pack
 - `PUT /config/effective-policy`: validate, backup, and save a policy pack
 - `GET /config/auth`: active auth configuration summary
@@ -163,7 +205,11 @@ Current test coverage validates:
 - PII redaction
 - Luhn-based credit-card filtering
 - provider token and high-entropy secret detection
+- extended secret and prompt-injection detector regression cases
 - JWT claim identity override
+- tenant rate limiting
+- RBAC tenant-scoped audit reads
+- NDJSON audit export
 - policy validation
 - OpenAI-compatible gateway enforcement
 - dry-run non-forwarding

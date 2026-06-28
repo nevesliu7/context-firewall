@@ -17,6 +17,8 @@
 - Lack of auditability when model usage causes a data incident.
 - Shadow AI clients bypassing approved provider and tenant policy.
 - Review workflows storing raw sensitive context during escalation.
+- One tenant reading another tenant's audit, approval, or usage metadata.
+- Runaway usage causing unexpected model-provider cost.
 
 ## Controls
 
@@ -28,6 +30,9 @@
 - Optional human review path for ambiguous high-risk content.
 - OpenAI-compatible gateway endpoint so clients can be redirected through enforcement.
 - Provider allowlists and role-based external routing thresholds.
+- RBAC for audit, approval, metrics, policy admin, and audit export endpoints.
+- Per-tenant request rate limits and daily estimated-token budgets.
+- Audit export endpoint that emits metadata-only JSON or NDJSON.
 - Approval tickets that store sanitized context only.
 
 ## Non-Goals
@@ -35,4 +40,4 @@
 - It does not guarantee perfect DLP coverage.
 - It does not replace legal, compliance, or security review.
 - It does not store raw prompts for later replay.
-- It does not implement production identity; local mode uses explicit demo headers.
+- It does not provision real users or federate Okta tenants automatically; Terraform creates the Cognito pool and groups, and external IdP wiring remains an operator step.

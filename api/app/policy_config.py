@@ -59,6 +59,27 @@ def validate_policy_config(policy: dict[str, Any]) -> list[str]:
         errors.append("approved_providers must be an object")
     if not isinstance(policy.get("rules"), list) or not policy.get("rules"):
         errors.append("rules must be a non-empty list")
+    usage_limits = policy.get("usage_limits", {})
+    if usage_limits and not isinstance(usage_limits, dict):
+        errors.append("usage_limits must be an object")
+    if isinstance(usage_limits, dict):
+        for key in ["requests_per_minute_per_tenant", "daily_estimated_tokens_per_tenant"]:
+            if key in usage_limits:
+                try:
+                    if int(usage_limits[key]) <= 0:
+                        errors.append(f"usage_limits.{key} must be positive")
+                except (TypeError, ValueError):
+                    errors.append(f"usage_limits.{key} must be an integer")
+        role_usage_limits = usage_limits.get("daily_estimated_tokens_by_role", {})
+        if role_usage_limits and not isinstance(role_usage_limits, dict):
+            errors.append("usage_limits.daily_estimated_tokens_by_role must be an object")
+        if isinstance(role_usage_limits, dict):
+            for role, limit in role_usage_limits.items():
+                try:
+                    if int(limit) <= 0:
+                        errors.append(f"usage_limits.daily_estimated_tokens_by_role.{role} must be positive")
+                except (TypeError, ValueError):
+                    errors.append(f"usage_limits.daily_estimated_tokens_by_role.{role} must be an integer")
 
     seen_ids: set[str] = set()
     for index, rule in enumerate(policy.get("rules", [])):

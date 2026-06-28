@@ -1,7 +1,9 @@
 import base64
+from datetime import datetime, timezone
 import json
 import os
 from typing import Any
+from uuid import uuid4
 
 
 try:
@@ -85,6 +87,36 @@ def maybe_put_approval_ticket(ticket: dict[str, Any]) -> None:
     _put_item(table_name, ticket)
 
 
+def maybe_put_audit_export(body: str, extension: str, content_type: str) -> dict[str, str] | None:
+    if os.getenv("CFW_AUDIT_EXPORT_BACKEND", "download").lower() != "s3":
+        return None
+    bucket = os.getenv("AUDIT_EXPORT_BUCKET")
+    if not bucket:
+        _aws_failure("AUDIT_EXPORT_BUCKET is required for S3 audit export delivery")
+        return None
+    if boto3 is None:
+        _aws_failure("boto3 is required for S3 audit export delivery")
+        return None
+
+    key = f"exports/{datetime.now(timezone.utc).strftime('%Y/%m/%d/%H%M%S')}-{uuid4()}.{extension}"
+    put_args: dict[str, Any] = {
+        "Bucket": bucket,
+        "Key": key,
+        "Body": body.encode("utf-8"),
+        "ContentType": content_type,
+    }
+    kms_key_id = os.getenv("CFW_KMS_KEY_ID")
+    if kms_key_id:
+        put_args["ServerSideEncryption"] = "aws:kms"
+        put_args["SSEKMSKeyId"] = kms_key_id
+    try:
+        boto3.client("s3").put_object(**put_args)
+        return {"bucket": bucket, "key": key}
+    except Exception as exc:  # pragma: no cover - requires AWS
+        _aws_failure(f"S3 audit export delivery failed: {exc}")
+        return None
+
+
 def _put_item(table_name: str, item: dict[str, Any]) -> None:
     if boto3 is None:
         _aws_failure("boto3 is required for DynamoDB")
@@ -112,4 +144,3 @@ def _aws_failure(message: str) -> None | str:
     if strict_aws():
         raise RuntimeError(message)
     return None
-

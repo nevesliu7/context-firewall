@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 import base64
 import json
+from uuid import uuid4
 
 from app.detectors import detect_findings
 from app.main import app
@@ -192,6 +193,82 @@ def test_policy_validation_reports_errors() -> None:
     body = response.json()
     assert body["valid"] is False
     assert body["errors"]
+
+
+def test_tenant_rate_limit_returns_429(monkeypatch) -> None:
+    monkeypatch.setenv("CFW_USAGE_LIMITS_ENABLED", "true")
+    monkeypatch.setenv("CFW_RATE_LIMIT_PER_MINUTE", "1")
+    monkeypatch.setenv("CFW_DAILY_TOKEN_BUDGET_PER_TENANT", "100000")
+    tenant_id = f"tenant-rate-{uuid4()}"
+    payload = {
+        "content": "Explain vector databases.",
+        "destination": "external_llm",
+        "model_provider": "openai",
+        "user_role": "developer",
+        "tenant_id": tenant_id,
+    }
+
+    first = client.post("/scan", json=payload)
+    second = client.post("/scan", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"]["message"] == "Tenant request rate limit exceeded"
+
+
+def test_rbac_filters_audit_to_jwt_tenant(monkeypatch) -> None:
+    monkeypatch.setenv("CFW_RBAC_ENFORCED", "true")
+    tenant_a = f"tenant-a-{uuid4()}"
+    tenant_b = f"tenant-b-{uuid4()}"
+    for tenant_id in [tenant_a, tenant_b]:
+        response = client.post(
+            "/scan",
+            json={
+                "content": "Explain vector databases.",
+                "destination": "external_llm",
+                "model_provider": "openai",
+                "user_role": "developer",
+                "tenant_id": tenant_id,
+                "user_id": f"user-{tenant_id}",
+            },
+        )
+        assert response.status_code == 200
+
+    token = _unsigned_jwt({"sub": "dev-user", "custom:tenant_id": tenant_a, "groups": ["Developers"]})
+    response = client.get("/audit?limit=50", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    records = response.json()
+    assert records
+    assert {record["tenant_id"] for record in records} == {tenant_a}
+
+
+def test_audit_export_supports_ndjson_tenant_filter(monkeypatch) -> None:
+    monkeypatch.setenv("CFW_RBAC_ENFORCED", "true")
+    tenant_id = f"tenant-export-{uuid4()}"
+    scan = client.post(
+        "/scan",
+        json={
+            "content": "Explain vector databases.",
+            "destination": "external_llm",
+            "model_provider": "openai",
+            "user_role": "developer",
+            "tenant_id": tenant_id,
+            "user_id": "export-user",
+        },
+    )
+    assert scan.status_code == 200
+
+    token = _unsigned_jwt({"sub": "security-user", "custom:tenant_id": "security", "groups": ["SecurityAdmins"]})
+    response = client.get(
+        f"/audit/export?format=ndjson&tenant_id={tenant_id}&limit=5",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert tenant_id in response.text
+    assert "export-user" in response.text
 
 
 def _unsigned_jwt(claims: dict) -> str:

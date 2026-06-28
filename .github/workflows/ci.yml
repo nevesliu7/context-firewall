@@ -26,6 +26,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: pytest -q
+      - run: ../scripts/package-lambda.sh
 
   frontend:
     name: frontend-build
@@ -43,3 +44,20 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  infra:
+    name: infra-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive infra/terraform
+
+  docker:
+    name: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t context-firewall-api ./api
+      - run: docker build -t context-firewall-web ./web

@@ -6,8 +6,10 @@ Use this checklist before moving Context Firewall from prototype to production.
 
 - Replace demo headers with verified Cognito, Okta, or enterprise IdP JWT claims.
 - Set `CFW_AUTH_REQUIRED=true`.
+- Set `CFW_RBAC_ENFORCED=true`.
 - Configure `CFW_JWT_ISSUER`, `CFW_JWT_AUDIENCE`, and `CFW_JWKS_URL`.
 - Confirm tenant, user, and role cannot be spoofed from client-controlled headers.
+- Confirm `SecurityAdmins`, `Developers`, `Support`, and `Contractors` map correctly from Cognito/Okta groups.
 
 ## Policy
 
@@ -28,7 +30,7 @@ Use this checklist before moving Context Firewall from prototype to production.
 - Keep `CFW_FORWARD_MODE=dry_run` during rollout.
 - Store provider keys in Secrets Manager using `CFW_OPENAI_SECRET_ID` or provider-specific secret IDs.
 - Verify provider allowlists and model allowlists.
-- Add budget and rate limits before live rollout.
+- Verify per-tenant request limits and daily token budgets before live rollout.
 
 ## Detection Quality
 
@@ -36,12 +38,14 @@ Use this checklist before moving Context Firewall from prototype to production.
 - Add allowlist exceptions for known test credentials.
 - Track policy hit rate and manual review outcomes.
 - Add regression tests for every detector change.
+- Review the extended detector regression suite before changing regexes.
 
 ## AWS
 
 - Use DynamoDB for audit and approval stores.
 - Enable KMS encryption on DynamoDB tables.
 - Send immutable audit exports to S3 or Security Lake.
+- Verify `/audit/export` output contains metadata only, never raw prompts.
 - Limit Lambda IAM permissions to specific tables, secrets, keys, and models.
 - Add CloudWatch alarms for spikes in `block`, `review`, and provider errors.
 
@@ -51,5 +55,5 @@ Use this checklist before moving Context Firewall from prototype to production.
 - Add dependency scanning.
 - Add secret scanning.
 - Add infrastructure template linting before deploy.
+- Build Docker images in CI.
 - Deploy first to a dry-run staging environment.
-

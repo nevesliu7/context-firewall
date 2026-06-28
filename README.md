@@ -154,7 +154,7 @@ cd api && .venv/bin/pytest -q
 cd web && npm run build
 ```
 
-The CI workflow template is included at `docs/ci/github-actions-ci.yml`. Move it to `.github/workflows/ci.yml` after authenticating GitHub with `workflow` scope.
+GitHub Actions CI is active at `.github/workflows/ci.yml`.
 
 Current test coverage validates:
 
